@@ -121,6 +121,12 @@ img{
   margin-top:7px;
   word-break:break-all
 }
+.error{
+  padding:12px;
+  color:#6b7280;
+  font-size:13px;
+  text-align:center
+}
 </style>
 </head>
 
@@ -133,8 +139,8 @@ const root = document.getElementById("root");
 function render(data) {
   const s = data?.sticker;
 
-  if (!s) {
-    root.innerHTML = "";
+  if (!s?.url) {
+    root.innerHTML = '<div class="error">没有收到表情图片</div>';
     return;
   }
 
@@ -148,15 +154,39 @@ function render(data) {
 
   const img = document.createElement("img");
   img.src = s.url;
-  img.alt = s.name;
+  img.alt = s.name || "";
+
+  img.onerror = () => {
+    root.innerHTML = '<div class="error">图片加载失败</div>';
+  };
 
   const name = document.createElement("div");
   name.className = "name";
-  name.textContent = s.name;
+  name.textContent = s.name || "";
 
   card.append(img, name);
   wrap.append(card);
   root.append(wrap);
+}
+
+function handleToolResult(params) {
+  let data = params?.structuredContent;
+
+  if (!data && params?.content) {
+    for (const item of params.content) {
+      if (item?.type === "text" && typeof item.text === "string") {
+        try {
+          const parsed = JSON.parse(item.text);
+          if (parsed?.sticker) {
+            data = parsed;
+            break;
+          }
+        } catch {}
+      }
+    }
+  }
+
+  render(data);
 }
 
 window.addEventListener("message", e => {
@@ -167,7 +197,7 @@ window.addEventListener("message", e => {
   if (!m || m.jsonrpc !== "2.0") return;
 
   if (m.method === "ui/notifications/tool-result") {
-    render(m.params?.structuredContent);
+    handleToolResult(m.params);
   }
 });
 </script>
