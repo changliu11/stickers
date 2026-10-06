@@ -183,52 +183,56 @@ function makeServer() {
   });
 
   registerAppResource(
-    server,
-    "lili-sticker",
-    UI_URI,
-    {},
-    async () => ({
-      contents: [
-        {
-          uri: UI_URI,
-          mimeType: RESOURCE_MIME_TYPE,
-          text: widgetHtml,
-          _meta: {
-            ui: {
-              prefersBorder: false,
-              csp: {
-                connectDomains: [],
-                resourceDomains: [
-                  "https://cdn.jsdelivr.net",
-                  "https://raw.githubusercontent.com"
-                ]
-              }
+  server,
+  "lili-sticker",
+  UI_URI,
+  {},
+  async () => ({
+    contents: [
+      {
+        uri: UI_URI,
+        mimeType: RESOURCE_MIME_TYPE,
+        text: widgetHtml,
+        _meta: {
+          ui: {
+            prefersBorder: false,
+            csp: {
+              connectDomains: [],
+              resourceDomains: [
+                "https://cdn.jsdelivr.net",
+                "https://raw.githubusercontent.com"
+              ]
             }
           }
         }
-      ]
-    })
-  );
-
-  registerAppTool(
-    server,
-    "search_stickers",
-    {
-      title: "Search stickers",
-      description:
-        "Search LiLi's personal sticker library by filename or phrase. Use this before rendering when the requested sticker is not an exact filename.",
-      inputSchema: {
-        query: z.string().min(1)
-      },
-      outputSchema: {
-        stickers: z.array(
-          z.object({
-            name: z.string(),
-            url: z.string()
-          })
-        )
       }
+    ]
+  })
+);
+
+registerAppTool(
+  server,
+  "search_stickers",
+  {
+    title: "Search stickers",
+    description:
+      "Search LiLi's personal sticker library by filename or phrase. Use this before rendering when the requested sticker is not an exact filename.",
+    inputSchema: {
+      query: z.string().min(1)
     },
+    outputSchema: {
+      stickers: z.array(
+        z.object({
+          name: z.string(),
+          url: z.string()
+        })
+      )
+    },
+    _meta: {
+      ui: {
+        resourceUri: UI_URI
+      }
+    }
     async ({ query }) => {
       const all = await listStickers();
 
