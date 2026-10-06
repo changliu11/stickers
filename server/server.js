@@ -131,8 +131,8 @@ body{
 }
 img{
   display:block;
-  max-width:100%;
-  max-height:360px;
+  max-width:240px;
+  max-height:240px;
   width:auto;
   height:auto;
   margin:auto;
@@ -382,6 +382,7 @@ function makeServer() {
       _meta: {
         ui: {
           visibility: ["model"]
+        }
       }
     },
     async ({ query }) => {
@@ -449,7 +450,8 @@ function makeServer() {
       },
       _meta: {
         ui: {
-          visibility: ["model"]
+          resourceUri: UI_URI
+        }
       }
     },
     async ({ name }) => {
@@ -499,7 +501,7 @@ function makeServer() {
     },
     _meta: {
       ui: {
-        resourceUri: UI_URI
+        visibility: ["model"]
       }
     }
   },
