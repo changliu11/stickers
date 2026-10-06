@@ -488,52 +488,57 @@ function makeServer() {
   );
 
   registerAppTool(
-    server,
-    "refresh_stickers",
-    {
-      title: "Refresh stickers",
-      description:
-        "Refresh the cached sticker filename list from the LiLi stickers GitHub repository through jsDelivr. Use this when the user says to refresh or when new stickers have been uploaded.",
-      inputSchema: {},
-      outputSchema: {
-        count: z.number(),
-        stickers: z.array(z.string())
-      }
+  server,
+  "refresh_stickers",
+  {
+    title: "Refresh stickers",
+    description:
+      "Refresh the cached sticker filename list from the LiLi stickers GitHub repository through jsDelivr. Use this when the user says to refresh or when new stickers have been uploaded.",
+    inputSchema: {},
+    outputSchema: {
+      count: z.number(),
+      stickers: z.array(z.string())
     },
-    async () => {
-      try {
-        const stickers =
-          await refreshStickers();
-
-        return {
-          structuredContent: {
-            count: stickers.length,
-            stickers: stickers.map(
-              x => x.name
-            )
-          },
-          content: [
-            {
-              type: "text",
-              text:
-                `表情列表已刷新，共 ${stickers.length} 个表情。`
-            }
-          ]
-        };
-      } catch (err) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text:
-                `刷新失败：${err.message}`
-            }
-          ]
-        };
+    _meta: {
+      ui: {
+        resourceUri: UI_URI
       }
     }
-  );
+  },
+  async () => {
+    try {
+      const stickers =
+        await refreshStickers();
+
+      return {
+        structuredContent: {
+          count: stickers.length,
+          stickers: stickers.map(
+            x => x.name
+          )
+        },
+        content: [
+          {
+            type: "text",
+            text:
+              \`表情列表已刷新，共 \${stickers.length} 个表情。\`
+          }
+        ]
+      };
+    } catch (err) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text:
+              \`刷新失败：\${err.message}\`
+          }
+        ]
+      };
+    }
+  }
+);
   
     return server;
 }
