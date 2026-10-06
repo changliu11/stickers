@@ -233,7 +233,8 @@ registerAppTool(
         resourceUri: UI_URI
       }
     }
-    async ({ query }) => {
+  },
+  async ({ query }) => {
       const all = await listStickers();
 
       const hits = all
