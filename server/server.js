@@ -493,7 +493,7 @@ function makeServer() {
   {
     title: "Refresh stickers",
     description:
-      "Refresh the cached sticker filename list from the LiLi stickers GitHub repository through jsDelivr. Use this when the user says to refresh or when new stickers have been uploaded.",
+      "Refresh the cached sticker filename list when new stickers have been uploaded.",
     inputSchema: {},
     outputSchema: {
       count: z.number(),
@@ -507,21 +507,20 @@ function makeServer() {
   },
   async () => {
     try {
-      const stickers =
-        await refreshStickers();
+      const stickers = await refreshStickers();
 
       return {
         structuredContent: {
           count: stickers.length,
-          stickers: stickers.map(
-            x => x.name
-          )
+          stickers: stickers.map(x => x.name)
         },
         content: [
           {
             type: "text",
             text:
-              \`表情列表已刷新，共 \${stickers.length} 个表情。\`
+              "表情列表已刷新，共 " +
+              stickers.length +
+              " 个表情。"
           }
         ]
       };
@@ -532,7 +531,8 @@ function makeServer() {
           {
             type: "text",
             text:
-              \`刷新失败：\${err.message}\`
+              "刷新失败：" +
+              (err?.message || String(err))
           }
         ]
       };
