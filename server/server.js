@@ -257,9 +257,8 @@ window.addEventListener("message", event => {
 async function init() {
   try {
     await sendRequest("ui/initialize", {
-      appCapabilities: {
-        availableDisplayModes: ["inline"]
-      },
+      protocolVersion: "2026-01-26",
+      appCapabilities: {},
       appInfo: {
         name: "LiLi Sticker",
         version: "1.0.0"
