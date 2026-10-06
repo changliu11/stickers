@@ -131,8 +131,8 @@ body{
 }
 img{
   display:block;
-  max-width:240px;
-  max-height:240px;
+  max-width:120px;
+  max-height:120px;
   width:auto;
   height:auto;
   margin:0;
