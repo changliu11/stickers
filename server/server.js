@@ -87,10 +87,7 @@ const widgetHtml = `
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta
-  name="viewport"
-  content="width=device-width,initial-scale=1"
->
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 body{
   margin:0;
@@ -131,16 +128,58 @@ img{
 </head>
 
 <body>
-<div id="root"></div>
+<div id="root">
+  <div class="error">加载中…</div>
+</div>
 
 <script>
 const root = document.getElementById("root");
+let requestId = 1;
+
+function sendRequest(method, params) {
+  const id = requestId++;
+
+  window.parent.postMessage({
+    jsonrpc: "2.0",
+    id,
+    method,
+    params
+  }, "*");
+
+  return new Promise((resolve, reject) => {
+    function listener(event) {
+      const m = event.data;
+
+      if (!m || m.id !== id) return;
+
+      window.removeEventListener("message", listener);
+
+      if (m.error) {
+        reject(new Error(m.error.message || "MCP error"));
+        return;
+      }
+
+      resolve(m.result);
+    }
+
+    window.addEventListener("message", listener);
+  });
+}
+
+function sendNotification(method, params) {
+  window.parent.postMessage({
+    jsonrpc: "2.0",
+    method,
+    params
+  }, "*");
+}
 
 function render(data) {
   const s = data?.sticker;
 
   if (!s?.url) {
-    root.innerHTML = '<div class="error">没有收到表情图片</div>';
+    root.innerHTML =
+      '<div class="error">没有收到表情图片</div>';
     return;
   }
 
@@ -157,7 +196,8 @@ function render(data) {
   img.alt = s.name || "";
 
   img.onerror = () => {
-    root.innerHTML = '<div class="error">图片加载失败</div>';
+    root.innerHTML =
+      '<div class="error">图片加载失败</div>';
   };
 
   const name = document.createElement("div");
@@ -170,13 +210,23 @@ function render(data) {
 }
 
 function handleToolResult(params) {
+  if (params?.isError) {
+    root.innerHTML =
+      '<div class="error">表情工具执行失败</div>';
+    return;
+  }
+
   let data = params?.structuredContent;
 
   if (!data && params?.content) {
     for (const item of params.content) {
-      if (item?.type === "text" && typeof item.text === "string") {
+      if (
+        item?.type === "text" &&
+        typeof item.text === "string"
+      ) {
         try {
           const parsed = JSON.parse(item.text);
+
           if (parsed?.sticker) {
             data = parsed;
             break;
@@ -189,17 +239,44 @@ function handleToolResult(params) {
   render(data);
 }
 
-window.addEventListener("message", e => {
-  if (e.source !== window.parent) return;
-
-  const m = e.data;
+window.addEventListener("message", event => {
+  const m = event.data;
 
   if (!m || m.jsonrpc !== "2.0") return;
 
   if (m.method === "ui/notifications/tool-result") {
     handleToolResult(m.params);
   }
+
+  if (m.method === "ui/notifications/tool-cancelled") {
+    root.innerHTML =
+      '<div class="error">已取消</div>';
+  }
 });
+
+async function init() {
+  try {
+    await sendRequest("ui/initialize", {
+      appCapabilities: {
+        availableDisplayModes: ["inline"]
+      },
+      appInfo: {
+        name: "LiLi Sticker",
+        version: "1.0.0"
+      }
+    });
+
+    sendNotification(
+      "ui/notifications/initialized",
+      {}
+    );
+  } catch (err) {
+    root.innerHTML =
+      '<div class="error">UI 初始化失败</div>';
+  }
+}
+
+init();
 </script>
 
 </body>
