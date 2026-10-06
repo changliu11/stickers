@@ -124,10 +124,10 @@ body{
   padding:10px
 }
 .card{
-  border:1px solid #e5e7eb;
+  border:none;
   border-radius:16px;
-  padding:10px;
-  background:#fff
+  padding:4px;
+  background:transparent
 }
 img{
   display:block;
@@ -135,7 +135,7 @@ img{
   max-height:240px;
   width:auto;
   height:auto;
-  margin:auto;
+  margin:0;
   border-radius:12px
 }
 .name{
@@ -243,7 +243,7 @@ function render(data) {
   name.className = "name";
   name.textContent = s.name || "";
 
-  card.append(img, name);
+  card.append(img);
   wrap.append(card);
   root.append(wrap);
 }
