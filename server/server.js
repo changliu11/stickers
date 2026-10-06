@@ -381,8 +381,7 @@ function makeServer() {
       },
       _meta: {
         ui: {
-          resourceUri: UI_URI
-        }
+          visibility: ["model"]
       }
     },
     async ({ query }) => {
@@ -450,8 +449,7 @@ function makeServer() {
       },
       _meta: {
         ui: {
-          resourceUri: UI_URI
-        }
+          visibility: ["model"]
       }
     },
     async ({ name }) => {
