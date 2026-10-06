@@ -1,7 +1,6 @@
 import { createServer } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   registerAppResource,
   registerAppTool,
@@ -15,43 +14,66 @@ const OWNER = "changliu11";
 const REPO = "stickers";
 const BRANCH = "main";
 
-const BASE = `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@${BRANCH}/`;
-const API = `https://api.github.com/repos/${OWNER}/${REPO}/contents/`;
+const BASE =
+  `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@${BRANCH}/`;
 
-let cached = null;
+const FILE_API =
+  `https://data.jsdelivr.com/v1/package/gh/${OWNER}/${REPO}@${BRANCH}`;
+
+let cached = [];
 let cachedAt = 0;
 
-async function listStickers() {
-  if (cached && Date.now() - cachedAt < 5 * 60_000) {
-    return cached;
+const IMAGE_RE = /\.(png|jpe?g|gif|webp)$/i;
+
+function makeSticker(name) {
+  return {
+    name,
+    url: BASE + encodeURIComponent(name)
+  };
+}
+
+function collectFiles(node, result = []) {
+  if (!Array.isArray(node)) return result;
+
+  for (const item of node) {
+    if (!item || typeof item !== "object") continue;
+
+    if (item.type === "file" && IMAGE_RE.test(item.name || "")) {
+      result.push(item.name);
+    }
+
+    if (Array.isArray(item.files)) {
+      collectFiles(item.files, result);
+    }
   }
 
-  const r = await fetch(API, {
+  return result;
+}
+
+async function refreshStickers() {
+  const r = await fetch(FILE_API, {
     headers: {
-      "User-Agent": "lili-sticker-sender",
-      "Accept": "application/vnd.github+json"
+      "User-Agent": "lili-sticker-sender"
     }
   });
 
   if (!r.ok) {
-    throw new Error(`GitHub listing failed: ${r.status}`);
+    throw new Error(`jsDelivr file listing failed: ${r.status}`);
   }
 
-  const items = await r.json();
+  const data = await r.json();
 
-  cached = items
-    .filter(
-      x =>
-        x.type === "file" &&
-        /\.(png|jpe?g|gif|webp)$/i.test(x.name)
-    )
-    .map(x => ({
-      name: x.name,
-      url: BASE + encodeURIComponent(x.name)
-    }));
+  const names = collectFiles(data.files)
+    .filter(name => !name.includes("/"))
+    .sort((a, b) => a.localeCompare(b));
 
+  cached = names.map(makeSticker);
   cachedAt = Date.now();
 
+  return cached;
+}
+
+function listStickers() {
   return cached;
 }
 
@@ -72,7 +94,9 @@ function score(name, query) {
     return 80;
   }
 
-  const terms = q.split(/\s+/).filter(Boolean);
+  const terms = q
+    .split(/\s+/)
+    .filter(Boolean);
 
   return terms.reduce(
     (s, t) => s + (n.includes(t) ? 15 : 0),
@@ -87,7 +111,10 @@ const widgetHtml = `
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1"
+>
 <style>
 body{
   margin:0;
@@ -128,6 +155,7 @@ img{
 </head>
 
 <body>
+
 <div id="root">
   <div class="error">加载中…</div>
 </div>
@@ -152,17 +180,27 @@ function sendRequest(method, params) {
 
       if (!m || m.id !== id) return;
 
-      window.removeEventListener("message", listener);
+      window.removeEventListener(
+        "message",
+        listener
+      );
 
       if (m.error) {
-        reject(new Error(m.error.message || "MCP error"));
+        reject(
+          new Error(
+            m.error.message || "MCP error"
+          )
+        );
         return;
       }
 
       resolve(m.result);
     }
 
-    window.addEventListener("message", listener);
+    window.addEventListener(
+      "message",
+      listener
+    );
   });
 }
 
@@ -192,6 +230,7 @@ function render(data) {
   card.className = "card";
 
   const img = document.createElement("img");
+
   img.src = s.url;
   img.alt = s.name || "";
 
@@ -244,11 +283,17 @@ window.addEventListener("message", event => {
 
   if (!m || m.jsonrpc !== "2.0") return;
 
-  if (m.method === "ui/notifications/tool-result") {
+  if (
+    m.method ===
+    "ui/notifications/tool-result"
+  ) {
     handleToolResult(m.params);
   }
 
-  if (m.method === "ui/notifications/tool-cancelled") {
+  if (
+    m.method ===
+    "ui/notifications/tool-cancelled"
+  ) {
     root.innerHTML =
       '<div class="error">已取消</div>';
   }
@@ -285,63 +330,78 @@ init();
 function makeServer() {
   const server = new McpServer({
     name: "LiLi Sticker Sender",
-    version: "0.1.0"
+    version: "0.2.0"
   });
 
   registerAppResource(
-  server,
-  "lili-sticker",
-  UI_URI,
-  {},
-  async () => ({
-    contents: [
-      {
-        uri: UI_URI,
-        mimeType: RESOURCE_MIME_TYPE,
-        text: widgetHtml,
-        _meta: {
-          ui: {
-            prefersBorder: false,
-            csp: {
-              connectDomains: [],
-              resourceDomains: [
-                "https://cdn.jsdelivr.net",
-                "https://raw.githubusercontent.com"
-              ]
+    server,
+    "lili-sticker",
+    UI_URI,
+    {},
+    async () => ({
+      contents: [
+        {
+          uri: UI_URI,
+          mimeType: RESOURCE_MIME_TYPE,
+          text: widgetHtml,
+          _meta: {
+            ui: {
+              prefersBorder: false,
+              csp: {
+                connectDomains: [],
+                resourceDomains: [
+                  "https://cdn.jsdelivr.net",
+                  "https://raw.githubusercontent.com"
+                ]
+              }
             }
           }
         }
-      }
-    ]
-  })
-);
+      ]
+    })
+  );
 
-registerAppTool(
-  server,
-  "search_stickers",
-  {
-    title: "Search stickers",
-    description:
-      "Search LiLi's personal sticker library by filename or phrase. Use this before rendering when the requested sticker is not an exact filename.",
-    inputSchema: {
-      query: z.string().min(1)
-    },
-    outputSchema: {
-      stickers: z.array(
-        z.object({
-          name: z.string(),
-          url: z.string()
-        })
-      )
-    },
-    _meta: {
-      ui: {
-        resourceUri: UI_URI
+  registerAppTool(
+    server,
+    "search_stickers",
+    {
+      title: "Search stickers",
+      description:
+        "Search LiLi's personal sticker library by filename or phrase. Uses the cached sticker list and does not contact GitHub during normal searches.",
+      inputSchema: {
+        query: z.string().min(1)
+      },
+      outputSchema: {
+        stickers: z.array(
+          z.object({
+            name: z.string(),
+            url: z.string()
+          })
+        )
+      },
+      _meta: {
+        ui: {
+          resourceUri: UI_URI
+        }
       }
-    }
-  },
-  async ({ query }) => {
-      const all = await listStickers();
+    },
+    async ({ query }) => {
+      const all = listStickers();
+
+      if (!all.length) {
+        return {
+          structuredContent: {
+            stickers: []
+          },
+          content: [
+            {
+              type: "text",
+              text:
+                "表情列表还没有加载，请先刷新表情列表。"
+            }
+          ]
+        };
+      }
 
       const hits = all
         .map(s => ({
@@ -378,7 +438,7 @@ registerAppTool(
     {
       title: "Render sticker",
       description:
-        "Render one sticker inside ChatGPT. Pass the exact filename returned by search_stickers. Use this after search_stickers when the user wants to see/send a sticker.",
+        "Render one sticker inside ChatGPT. Pass the exact filename returned by search_stickers.",
       inputSchema: {
         name: z.string().min(1)
       },
@@ -395,7 +455,7 @@ registerAppTool(
       }
     },
     async ({ name }) => {
-      const all = await listStickers();
+      const all = listStickers();
 
       const sticker = all.find(
         x => x.name === name
@@ -407,7 +467,7 @@ registerAppTool(
           content: [
             {
               type: "text",
-              text: `找不到：${name}`
+              text: `找不到：${name}，请先刷新表情列表。`
             }
           ]
         };
@@ -427,242 +487,92 @@ registerAppTool(
     }
   );
 
-  return server;
+  registerAppTool(
+    server,
+    "refresh_stickers",
+    {
+      title: "Refresh stickers",
+      description:
+        "Refresh the cached sticker filename list from the LiLi stickers GitHub repository through jsDelivr. Use this when the user says to refresh or when new stickers have been uploaded.",
+      inputSchema: {},
+      outputSchema: {
+        count: z.number(),
+        stickers: z.array(z.string())
+      }
+    },
+    async () => {
+      try {
+        const stickers =
+          await refreshStickers();
+
+        return {
+          structuredContent: {
+            count: stickers.length,
+            stickers: stickers.map(
+              x => x.name
+            )
+          },
+          content: [
+            {
+              type: "text",
+              text:
+                `表情列表已刷新，共 ${stickers.length} 个表情。`
+            }
+          ]
+        };
+      } catch (err) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text:
+                `刷新失败：${err.message}`
+            }
+          ]
+        };
+      }
+    }
+  );
+  
+    return server;
 }
 
-/*
- * Legacy SSE transports.
- *
- * Each SSE connection gets its own transport/session.
- */
-const sseTransports = new Map();
-
-/*
- * HTTP server
- */
-const http = createServer(async (req, res) => {
-  const url = new URL(
-    req.url || "/",
-    `http://${req.headers.host || "localhost"}`
-  );
-
-  /*
-   * Health check
-   */
-  if (
-    req.method === "GET" &&
-    url.pathname === "/health"
-  ) {
-    res.writeHead(200, {
-      "content-type": "text/plain; charset=utf-8"
-    });
-
-    res.end("ok");
-    return;
-  }
-
-  /*
-   * Modern Streamable HTTP MCP
-   *
-   * https://.mcp
-   */
-  if (url.pathname === "/mcp") {
-    res.setHeader(
-      "Access-Control-Allow-Origin",
-      "*"
-    );
-
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "POST, GET, DELETE, OPTIONS"
-    );
-
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "content-type, mcp-session-id, mcp-protocol-version"
-    );
-
-    res.setHeader(
-      "Access-Control-Expose-Headers",
-      "Mcp-Session-Id"
-    );
-
-    if (req.method === "OPTIONS") {
-      res.writeHead(204);
-      res.end();
+const http = createServer(
+  async (req, res) => {
+    if (req.url === "/health") {
+      res.writeHead(200, {
+        "content-type": "text/plain"
+      });
+      res.end("ok");
       return;
     }
 
-    const server = makeServer();
+    if (req.url?.startsWith("/mcp")) {
+      const server = makeServer();
 
-    const transport =
-      new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true
-      });
-
-    res.on("close", () => {
-      transport.close();
-      server.close();
-    });
-
-    try {
-      await server.connect(transport);
-      await transport.handleRequest(req, res);
-    } catch (error) {
-      console.error(
-        "MCP request error:",
-        error
-      );
-
-      if (!res.headersSent) {
-        res.writeHead(500, {
-          "content-type":
-            "text/plain; charset=utf-8"
+      const transport =
+        new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined
         });
 
-        res.end("Internal server error");
-      }
-    }
-
-    return;
-  }
-
-  /*
-   * Legacy SSE MCP
-   *
-   * https://.sse
-   */
-  if (
-    req.method === "GET" &&
-    url.pathname === "/sse"
-  ) {
-    const server = makeServer();
-
-    const transport =
-      new SSEServerTransport(
-        "/messages",
-        res
-      );
-
-    sseTransports.set(
-      transport.sessionId,
-      {
-        transport,
-        server
-      }
-    );
-
-    res.on("close", () => {
-      sseTransports.delete(
-        transport.sessionId
-      );
-
-      server.close();
-    });
-
-    try {
       await server.connect(transport);
-    } catch (error) {
-      console.error(
-        "SSE connection error:",
-        error
-      );
-
-      sseTransports.delete(
-        transport.sessionId
-      );
-
-      if (!res.headersSent) {
-        res.writeHead(500, {
-          "content-type":
-            "text/plain; charset=utf-8"
-        });
-
-        res.end("SSE connection failed");
-      }
-    }
-
-    return;
-  }
-
-  /*
-   * Legacy SSE message endpoint
-   *
-   * https://.messages?sessionId=...
-   */
-  if (
-    req.method === "POST" &&
-    url.pathname === "/messages"
-  ) {
-    const sessionId =
-      url.searchParams.get("sessionId");
-
-    if (!sessionId) {
-      res.writeHead(400, {
-        "content-type":
-          "text/plain; charset=utf-8"
-      });
-
-      res.end("Missing sessionId");
-      return;
-    }
-
-    const entry =
-      sseTransports.get(sessionId);
-
-    if (!entry) {
-      res.writeHead(400, {
-        "content-type":
-          "text/plain; charset=utf-8"
-      });
-
-      res.end(
-        "No transport found for sessionId"
-      );
-
-      return;
-    }
-
-    try {
-      await entry.transport.handlePostMessage(
+      await transport.handleRequest(
         req,
         res
       );
-    } catch (error) {
-      console.error(
-        "SSE message error:",
-        error
-      );
-
-      if (!res.headersSent) {
-        res.writeHead(500, {
-          "content-type":
-            "text/plain; charset=utf-8"
-        });
-
-        res.end(
-          "SSE message handling failed"
-        );
-      }
+      return;
     }
 
-    return;
+    res.writeHead(404);
+    res.end("Not found");
   }
+);
 
-  /*
-   * Not found
-   */
-  res.writeHead(404, {
-    "content-type":
-      "text/plain; charset=utf-8"
-  });
-
-  res.end("Not found");
-});
-
-http.listen(PORT, () => {
-  console.log(
-    `LiLi Sticker Sender listening on :${PORT}`
-  );
-});
+http.listen(
+  PORT,
+  () =>
+    console.log(
+      `LiLi Sticker Sender listening on :${PORT}`
+    )
+);
